@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.example.ipot_pos"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.1.12297006"
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
