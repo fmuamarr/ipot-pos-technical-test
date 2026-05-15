@@ -62,6 +62,26 @@ class CartController extends GetxController {
     }
   }
 
+  void updateItem(
+    String cartItemId,
+    List<SelectedCustomization> customizations,
+    int quantity,
+  ) {
+    final index = items.indexWhere((ci) => ci.cartItemId == cartItemId);
+    if (index < 0) return;
+    if (quantity <= 0) {
+      items.removeAt(index);
+    } else {
+      items[index] = CartItem(
+        cartItemId: items[index].cartItemId,
+        menuItem: items[index].menuItem,
+        quantity: quantity,
+        customizations: customizations,
+      );
+      items.refresh();
+    }
+  }
+
   void removeItem(String cartItemId) {
     items.removeWhere((ci) => ci.cartItemId == cartItemId);
   }

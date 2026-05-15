@@ -12,7 +12,8 @@ const Map<String, dynamic> kMockMenuResponse = {
       'description': 'Steamed soybeans with sea salt',
       'price': 5.99,
       'category_id': 1,
-      'image_url': null,
+      'image_url':
+          'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=400&q=80',
       'customization_groups': [
         {
           'id': 1,
@@ -33,7 +34,8 @@ const Map<String, dynamic> kMockMenuResponse = {
       'description': 'Fresh Norwegian salmon, 8 pieces',
       'price': 16.99,
       'category_id': 2,
-      'image_url': null,
+      'image_url':
+          'https://images.unsplash.com/photo-1611143669185-af224c5e3252?w=400&q=80',
       'customization_groups': [
         {
           'id': 2,
@@ -53,7 +55,8 @@ const Map<String, dynamic> kMockMenuResponse = {
       'description': 'Hot Japanese green tea',
       'price': 3.50,
       'category_id': 3,
-      'image_url': null,
+      'image_url':
+          'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&q=80',
       'customization_groups': [],
     },
     {
@@ -62,7 +65,8 @@ const Map<String, dynamic> kMockMenuResponse = {
       'description': 'Rich chicken broth with chashu, egg, and noodles',
       'price': 14.99,
       'category_id': 2,
-      'image_url': null,
+      'image_url':
+          'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400&q=80',
       'customization_groups': [
         {
           'id': 3,

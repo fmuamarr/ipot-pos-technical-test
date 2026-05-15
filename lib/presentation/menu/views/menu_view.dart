@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../../../app/infrastructure/routes/app_pages.dart';
 import '../../../domain/entities/customization_group.dart';
 import '../../../domain/entities/customization_option.dart';
+import '../../../domain/entities/menu_category.dart';
 import '../../../domain/entities/menu_item.dart';
 import '../../../domain/entities/selected_customization.dart';
 import '../../cart/controllers/cart_controller.dart';
@@ -15,52 +16,247 @@ class MenuView extends GetView<MenuController> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F4F0),
-      appBar: _buildAppBar(context),
+      backgroundColor: const Color(0xFFF5F5F5),
       body: Obx(
         () => switch (controller.loadState.value) {
           MenuLoadState.loading => const Center(
             child: CircularProgressIndicator(),
           ),
           MenuLoadState.error => _buildError(),
-          MenuLoadState.success || MenuLoadState.idle => _buildContent(context),
+          MenuLoadState.success || MenuLoadState.idle => _buildSuccess(context),
         },
       ),
-      floatingActionButton: _buildCartFab(),
+      bottomNavigationBar: _buildCartBar(),
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
-    return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      leading: IconButton(
-        icon: const Icon(Icons.qr_code_scanner, color: Colors.black87),
-        tooltip: 'Scan another table',
-        onPressed: () => Get.back(),
-      ),
-      title: Obx(
-        () => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              controller.restaurantName,
-              style: const TextStyle(
-                color: Colors.black87,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+  Widget _buildSuccess(BuildContext context) {
+    final categories = controller.menuResponse.value?.categories ?? [];
+    return Column(
+      children: [
+        _buildHeader(),
+        _buildSearchBar(),
+        _buildCategoryChips(categories),
+        Expanded(child: _buildItemList(context, categories)),
+      ],
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      color: const Color(0xFFD5001E),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 16, 16),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
+                onPressed: () => Get.back(),
               ),
-            ),
-            Obx(
-              () => Text(
-                'Table ${controller.cart.tableId.value}',
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              Expanded(
+                child: Obx(
+                  () => Text(
+                    controller.restaurantName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ],
+              Obx(
+                () => Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Table-${controller.cart.tableId.value}',
+                    style: const TextStyle(
+                      color: Color(0xFFD5001E),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+      child: TextField(
+        onChanged: controller.onSearchChanged,
+        decoration: InputDecoration(
+          hintText: 'Search menu...',
+          hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+          suffixIcon: const Icon(Icons.search, color: Colors.grey),
+          filled: true,
+          fillColor: const Color(0xFFF5F5F5),
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 0,
+            horizontal: 16,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(24),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryChips(List<MenuCategory> categories) {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SizedBox(
+        height: 36,
+        child: Obx(() {
+          final selectedIndex = controller.selectedCategoryIndex.value;
+          return ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: categories.length + 1,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final isSelected = selectedIndex == index;
+              final label = index == 0
+                  ? 'All Menu'
+                  : categories[index - 1].name;
+              return _CategoryChip(
+                label: label,
+                isSelected: isSelected,
+                onTap: () => controller.selectCategory(index),
+              );
+            },
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildItemList(BuildContext context, List<MenuCategory> categories) {
+    return Obx(() {
+      final items = controller.filteredItems;
+      if (items.isEmpty) {
+        return const Center(
+          child: Text('Tidak ada menu', style: TextStyle(color: Colors.grey)),
+        );
+      }
+
+      final sections = _buildSections(items, categories);
+
+      return ListView.builder(
+        padding: const EdgeInsets.only(bottom: 16),
+        itemCount: sections.length,
+        itemBuilder: (context, index) {
+          final section = sections[index];
+          if (section is String) {
+            return _buildSectionHeader(section);
+          }
+          return _MenuItemCard(
+            item: section as MenuItem,
+            cart: controller.cart,
+          );
+        },
+      );
+    });
+  }
+
+  List<Object> _buildSections(
+    List<MenuItem> items,
+    List<MenuCategory> categories,
+  ) {
+    final result = <Object>[];
+    int? lastCategoryId;
+    for (final item in items) {
+      if (item.categoryId != lastCategoryId) {
+        lastCategoryId = item.categoryId;
+        final cat = categories
+            .where((c) => c.id == item.categoryId)
+            .firstOrNull;
+        if (cat != null) result.add(cat.name);
+      }
+      result.add(item);
+    }
+    return result;
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF121212),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCartBar() {
+    return Obx(() {
+      final count = controller.cart.totalItemCount;
+      if (count == 0) return const SizedBox.shrink();
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: GestureDetector(
+            onTap: () => Get.toNamed(Routes.CART),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD5001E),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    '$count Item',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    controller.cart.formatPrice(controller.cart.subtotal),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Icon(
+                    Icons.shopping_cart,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    });
   }
 
   Widget _buildError() {
@@ -84,101 +280,6 @@ class MenuView extends GetView<MenuController> {
       ),
     );
   }
-
-  Widget _buildContent(BuildContext context) {
-    final categories = controller.menuResponse.value?.categories ?? [];
-
-    return Column(
-      children: [
-        // Search bar
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: TextField(
-            onChanged: controller.onSearchChanged,
-            decoration: InputDecoration(
-              hintText: 'Search menu…',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(vertical: 0),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-        ),
-
-        // Category tabs
-        if (categories.isNotEmpty)
-          SizedBox(
-            height: 44,
-            child: Obx(() {
-              // Read the observable at the top of the Obx callback so GetX
-              // can track it during the synchronous build pass (itemBuilder
-              // is lazy and would otherwise be called outside the tracking scope).
-              final selectedIndex = controller.selectedCategoryIndex.value;
-              return ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: categories.length + 1,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final isAll = index == 0;
-                  final isSelected = selectedIndex == index;
-                  final label = isAll ? 'All' : categories[index - 1].name;
-                  return _CategoryChip(
-                    label: label,
-                    isSelected: isSelected,
-                    onTap: () => controller.selectCategory(index),
-                  );
-                },
-              );
-            }),
-          ),
-
-        // Menu items list
-        Expanded(
-          child: Obx(() {
-            final items = controller.filteredItems;
-            if (items.isEmpty) {
-              return const Center(
-                child: Text(
-                  'No items found',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              );
-            }
-            return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-              itemCount: items.length,
-              itemBuilder: (context, index) =>
-                  _MenuItemCard(item: items[index], cart: controller.cart),
-            );
-          }),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCartFab() {
-    return Obx(() {
-      final count = controller.cart.totalItemCount;
-      if (count == 0) return const SizedBox.shrink();
-      return FloatingActionButton.extended(
-        onPressed: () => Get.toNamed(Routes.CART),
-        backgroundColor: const Color(0xFFFF6B35),
-        icon: const Icon(Icons.shopping_cart, color: Colors.white),
-        label: Text(
-          '$count item${count != 1 ? 's' : ''} · ${controller.cart.formatPrice(controller.cart.subtotal)}',
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
-    });
-  }
 }
 
 class _CategoryChip extends StatelessWidget {
@@ -197,23 +298,16 @@ class _CategoryChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFFF6B35) : Colors.white,
+          color: isSelected ? const Color(0xFFD5001E) : const Color(0xFFF5F5F5),
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? Colors.white : Colors.black87,
+            color: isSelected ? Colors.white : const Color(0xFF121212),
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             fontSize: 13,
           ),
@@ -231,32 +325,27 @@ class _MenuItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 2,
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         onTap: () => _showItemDetail(context),
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Item image placeholder
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: item.imageUrl != null
-                    ? Image.network(
-                        item.imageUrl!,
-                        width: 80,
-                        height: 80,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _buildImagePlaceholder(),
-                      )
-                    : _buildImagePlaceholder(),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -266,6 +355,7 @@ class _MenuItemCard extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
+                        color: Color(0xFF121212),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -275,7 +365,7 @@ class _MenuItemCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -284,19 +374,40 @@ class _MenuItemCard extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFFFF6B35),
+                            color: Color(0xFF121212),
                           ),
                         ),
-                        if (item.customizationGroups.isEmpty)
-                          _QuickAddButton(item: item, cart: cart)
-                        else
-                          _CustomizeButton(
-                            onTap: () => _showItemDetail(context),
-                          ),
+                        _TambahButton(
+                          onTap: item.customizationGroups.isEmpty
+                              ? () {
+                                  cart.addItem(item);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('${item.name} ditambahkan'),
+                                      duration: const Duration(seconds: 1),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              : () => _showItemDetail(context),
+                        ),
                       ],
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(width: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: item.imageUrl != null
+                    ? Image.network(
+                        item.imageUrl!,
+                        width: 90,
+                        height: 90,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _imagePlaceholder(),
+                      )
+                    : _imagePlaceholder(),
               ),
             ],
           ),
@@ -305,11 +416,11 @@ class _MenuItemCard extends StatelessWidget {
     );
   }
 
-  Widget _buildImagePlaceholder() {
+  Widget _imagePlaceholder() {
     return Container(
-      width: 80,
-      height: 80,
-      color: const Color(0xFFF0EDE8),
+      width: 90,
+      height: 90,
+      color: const Color(0xFFF5F5F5),
       child: const Icon(Icons.restaurant, color: Colors.grey, size: 32),
     );
   }
@@ -324,69 +435,35 @@ class _MenuItemCard extends StatelessWidget {
   }
 }
 
-class _QuickAddButton extends StatelessWidget {
-  final MenuItem item;
-  final CartController cart;
-
-  const _QuickAddButton({required this.item, required this.cart});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        cart.addItem(item);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${item.name} added to cart'),
-            duration: const Duration(seconds: 1),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFFFF6B35),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.add, color: Colors.white, size: 16),
-            SizedBox(width: 4),
-            Text('Add', style: TextStyle(color: Colors.white, fontSize: 13)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CustomizeButton extends StatelessWidget {
+class _TambahButton extends StatelessWidget {
   final VoidCallback onTap;
 
-  const _CustomizeButton({required this.onTap});
+  const _TambahButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFFFF6B35)),
+          color: const Color(0xFFD5001E),
           borderRadius: BorderRadius.circular(20),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: const Text(
-          'Customize',
-          style: TextStyle(color: Color(0xFFFF6B35), fontSize: 13),
+          'Add',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );
   }
 }
 
-// ─── Item Detail Bottom Sheet ───────────────────────────────────────────────
+// ─── Item Detail Bottom Sheet ────────────────────────────────────────────────
 
 class _ItemDetailSheet extends StatefulWidget {
   final MenuItem item;
@@ -400,7 +477,6 @@ class _ItemDetailSheet extends StatefulWidget {
 
 class _ItemDetailSheetState extends State<_ItemDetailSheet> {
   int _quantity = 1;
-  // groupId → selected option ids
   final Map<int, Set<int>> _selectedOptions = {};
 
   @override
@@ -473,83 +549,123 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
         ),
         child: Column(
           children: [
-            // Handle
-            Container(
-              margin: const EdgeInsets.only(top: 10),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
             Expanded(
               child: ListView(
                 controller: scroll,
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                padding: EdgeInsets.zero,
                 children: [
-                  // Item header
-                  Text(
-                    widget.item.name,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    widget.item.description,
-                    style: const TextStyle(color: Colors.grey, fontSize: 14),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    widget.cart.formatPrice(widget.item.price),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFFFF6B35),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Customization groups
-                  ...widget.item.customizationGroups.map(
-                    (group) => _buildGroupSection(group),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Quantity control
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  Stack(
                     children: [
-                      _QuantityButton(
-                        icon: Icons.remove,
-                        onTap: () {
-                          if (_quantity > 1) setState(() => _quantity--);
-                        },
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(20),
+                        ),
+
+                        child: widget.item.imageUrl != null
+                            ? Image.network(
+                                widget.item.imageUrl!,
+                                height: 220,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _imageFallback(),
+                              )
+                            : _imageFallback(),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Text(
-                          '$_quantity',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
+                      Positioned(
+                        top: 10,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.8),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
                           ),
                         ),
                       ),
-                      _QuantityButton(
-                        icon: Icons.add,
-                        onTap: () => setState(() => _quantity++),
-                      ),
                     ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.item.name,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF121212),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          widget.item.description,
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          widget.cart.formatPrice(widget.item.price),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF121212),
+                          ),
+                        ),
+                        if (widget.item.customizationGroups.isNotEmpty) ...[
+                          const SizedBox(height: 20),
+                          ...widget.item.customizationGroups.map(
+                            (group) => _buildGroupSection(group),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        const Text(
+                          'How many?',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF121212),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            _QuantityButton(
+                              icon: Icons.remove,
+                              onTap: () {
+                                if (_quantity > 1) setState(() => _quantity--);
+                              },
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
+                              child: Text(
+                                '$_quantity',
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            _QuantityButton(
+                              icon: Icons.add,
+                              onTap: () => setState(() => _quantity++),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
-
-            // Add to cart button
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
@@ -576,7 +692,7 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
                           }
                         : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6B35),
+                      backgroundColor: const Color(0xFFD5001E),
                       disabledBackgroundColor: Colors.grey.shade300,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -603,6 +719,15 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
     );
   }
 
+  Widget _imageFallback() {
+    return Container(
+      height: 220,
+      width: double.infinity,
+      color: const Color(0xFFF5F5F5),
+      child: const Icon(Icons.restaurant, color: Colors.grey, size: 64),
+    );
+  }
+
   Widget _buildGroupSection(CustomizationGroup group) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -611,36 +736,37 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
           children: [
             Text(
               group.name,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
             const SizedBox(width: 8),
-            if (group.required)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF6B35).withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text(
-                  'Required',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFFFF6B35),
-                    fontWeight: FontWeight.w500,
-                  ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: group.required
+                    ? const Color(0xFFD5001E).withOpacity(0.1)
+                    : const Color(0xFFF5F5F5),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                group.required ? 'Required' : 'Optional',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: group.required ? const Color(0xFFD5001E) : Colors.grey,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
+            ),
           ],
         ),
         if (group.maxSelections > 1)
           Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Text(
-              'Choose up to ${group.maxSelections}',
+              'Select up to ${group.maxSelections}',
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         ...group.options.map((opt) => _buildOptionTile(group, opt)),
         const Divider(height: 24),
       ],
@@ -652,7 +778,6 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
     CustomizationOption option,
   ) {
     final isSelected = _selectedOptions[group.id]?.contains(option.id) ?? false;
-
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
@@ -660,12 +785,12 @@ class _ItemDetailSheetState extends State<_ItemDetailSheet> {
           ? Radio<int>(
               value: option.id,
               groupValue: _selectedOptions[group.id]?.firstOrNull,
-              activeColor: const Color(0xFFFF6B35),
+              activeColor: const Color(0xFFD5001E),
               onChanged: (_) => _toggleOption(group, option),
             )
           : Checkbox(
               value: isSelected,
-              activeColor: const Color(0xFFFF6B35),
+              activeColor: const Color(0xFFD5001E),
               onChanged: (_) => _toggleOption(group, option),
             ),
       title: Text(option.name, style: const TextStyle(fontSize: 14)),
@@ -693,7 +818,7 @@ class _QuantityButton extends StatelessWidget {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: const Color(0xFFFF6B35),
+          color: const Color(0xFFD5001E),
           borderRadius: BorderRadius.circular(18),
         ),
         child: Icon(icon, color: Colors.white, size: 20),

@@ -11,14 +11,19 @@ class OrderTrackingView extends GetView<OrderTrackingController> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F4F0),
+      backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         leading: const BackButton(color: Colors.black87),
+        centerTitle: true,
         title: const Text(
           'Order Status',
-          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
         actions: [
           Obx(() {
@@ -28,7 +33,10 @@ class OrderTrackingView extends GetView<OrderTrackingController> {
                 child: SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFFD5001E),
+                  ),
                 ),
               );
             }
@@ -39,144 +47,121 @@ class OrderTrackingView extends GetView<OrderTrackingController> {
       body: Obx(() {
         final order = controller.order.value;
         if (order == null) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFFD5001E)),
+          );
         }
-        return _buildContent(context, order);
+        return _buildContent(order);
       }),
     );
   }
 
-  Widget _buildContent(BuildContext context, OrderEntity order) {
-    return ListView(
-      padding: const EdgeInsets.all(20),
+  Widget _buildContent(OrderEntity order) {
+    return Column(
       children: [
-        // Order ID card
-        Card(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Order ID',
-                  style: TextStyle(color: Colors.grey, fontSize: 12),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  order.id,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                    fontFamily: 'monospace',
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            children: [
+              _buildOrderInfoCard(order),
+              const SizedBox(height: 12),
+              _buildProgressCard(),
+              const SizedBox(height: 12),
+              Obx(() {
+                final msg = controller.errorMessage.value;
+                if (msg.isEmpty) return const SizedBox.shrink();
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
                   ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Table',
-                  style: TextStyle(color: Colors.grey, fontSize: 12),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  order.tableId,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF9C4),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                ),
-                if (order.estimatedTime != null) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.access_time,
-                        size: 14,
-                        color: Color(0xFFFF6B35),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Est. ${order.estimatedTime}',
-                        style: const TextStyle(
-                          color: Color(0xFFFF6B35),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    msg,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF7A6600),
+                      fontSize: 13,
+                    ),
                   ),
-                ],
-              ],
-            ),
+                );
+              }),
+            ],
           ),
         ),
-        const SizedBox(height: 24),
-
-        // Status stepper
-        Card(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Progress',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 20),
-                Obx(() => _buildStepper()),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Error message
-        Obx(() {
-          if (controller.errorMessage.value.isNotEmpty) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Text(
-                controller.errorMessage.value,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.orange, fontSize: 13),
-              ),
-            );
-          }
-          return const SizedBox.shrink();
-        }),
-
-        // Served state: go home button
         Obx(() {
           if (controller.order.value?.status == OrderStatus.served) {
-            return ElevatedButton(
-              onPressed: () => Get.offAllNamed(Routes.HOME),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6B35),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: const Text(
-                'Start New Order',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            );
+            return _buildDoneButton();
           }
           return const SizedBox.shrink();
         }),
       ],
+    );
+  }
+
+  Widget _buildOrderInfoCard(OrderEntity order) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          _infoRow('Order ID', order.id),
+          const SizedBox(height: 10),
+          _infoRow('Table', 'Table-${order.tableId}'),
+          if (order.estimatedTime != null) ...[
+            const SizedBox(height: 10),
+            _infoRow('Est. time', order.estimatedTime!),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Color(0xFF121212),
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProgressCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Order Progress',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: Color(0xFF121212),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Obx(() => _buildStepper()),
+        ],
+      ),
     );
   }
 
@@ -201,31 +186,31 @@ class OrderTrackingView extends GetView<OrderTrackingController> {
                 if (!isLast)
                   Container(
                     width: 2,
-                    height: 40,
+                    height: 44,
                     color: isDone
-                        ? const Color(0xFF4CAF50)
-                        : Colors.grey.shade300,
+                        ? const Color(0xFF099C54)
+                        : Colors.grey.shade200,
                   ),
               ],
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.only(bottom: 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       status.displayName,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 14,
                         fontWeight: isCurrent
                             ? FontWeight.bold
                             : FontWeight.normal,
                         color: isCurrent
-                            ? const Color(0xFFFF6B35)
+                            ? const Color(0xFFD5001E)
                             : isDone
-                            ? Colors.black87
+                            ? const Color(0xFF121212)
                             : Colors.grey,
                       ),
                     ),
@@ -234,7 +219,7 @@ class OrderTrackingView extends GetView<OrderTrackingController> {
                         'Current status',
                         style: TextStyle(fontSize: 11, color: Colors.grey),
                       ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
@@ -244,52 +229,127 @@ class OrderTrackingView extends GetView<OrderTrackingController> {
       }).toList(),
     );
   }
+
+  Widget _buildDoneButton() {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: () => Get.offAllNamed(Routes.HOME),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD5001E),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: const Text(
+              'Start New Order',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _StatusDot extends StatelessWidget {
+class _StatusDot extends StatefulWidget {
   final bool isDone;
   final bool isCurrent;
 
   const _StatusDot({required this.isDone, required this.isCurrent});
 
   @override
+  State<_StatusDot> createState() => _StatusDotState();
+}
+
+class _StatusDotState extends State<_StatusDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulse;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _scale = TweenSequence([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.35), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.35, end: 1.0), weight: 50),
+    ]).animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut));
+
+    if (widget.isCurrent) _pulse.repeat();
+  }
+
+  @override
+  void didUpdateWidget(_StatusDot old) {
+    super.didUpdateWidget(old);
+    if (widget.isCurrent && !_pulse.isAnimating) {
+      _pulse.repeat();
+    } else if (!widget.isCurrent && _pulse.isAnimating) {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (isDone) {
+    if (widget.isDone) {
       return Container(
-        width: 24,
-        height: 24,
+        width: 26,
+        height: 26,
         decoration: const BoxDecoration(
-          color: Color(0xFF4CAF50),
+          color: Color(0xFF099C54),
           shape: BoxShape.circle,
         ),
-        child: const Icon(Icons.check, color: Colors.white, size: 14),
+        child: const Icon(Icons.check, color: Colors.white, size: 15),
       );
     }
-    if (isCurrent) {
-      return Container(
-        width: 24,
-        height: 24,
-        decoration: BoxDecoration(
-          color: const Color(0xFFFF6B35),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFF6B35).withOpacity(0.4),
-              blurRadius: 8,
-              spreadRadius: 2,
-            ),
-          ],
-        ),
-        child: const Icon(
-          Icons.radio_button_checked,
-          color: Colors.white,
-          size: 14,
+    if (widget.isCurrent) {
+      return AnimatedBuilder(
+        animation: _scale,
+        builder: (_, child) =>
+            Transform.scale(scale: _scale.value, child: child),
+        child: Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            color: const Color(0xFFD5001E),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFD5001E).withOpacity(0.45),
+                blurRadius: 10,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.radio_button_checked,
+            color: Colors.white,
+            size: 15,
+          ),
         ),
       );
     }
     return Container(
-      width: 24,
-      height: 24,
+      width: 26,
+      height: 26,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(color: Colors.grey.shade300, width: 2),

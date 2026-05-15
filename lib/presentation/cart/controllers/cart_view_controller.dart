@@ -27,9 +27,22 @@ class CartViewController extends GetxController {
             ? null
             : customerNote.value.trim(),
       );
+      final itemSnapshot = cart.items
+          .map(
+            (i) => {
+              'name': i.menuItem.name,
+              'qty': i.quantity,
+              'price': i.totalPrice,
+            },
+          )
+          .toList();
+      final subtotal = cart.subtotal;
       cart.clearCart();
       submitState.value = OrderSubmitState.success;
-      Get.offNamed('/order-confirmation', arguments: order);
+      Get.offNamed(
+        '/order-confirmation',
+        arguments: {'order': order, 'items': itemSnapshot, 'total': subtotal},
+      );
     } catch (e) {
       errorMessage.value = 'Failed to submit order. Please try again.';
       submitState.value = OrderSubmitState.error;

@@ -9,64 +9,100 @@ class HomeView extends GetView<HomeController> {
 
   @override
   Widget build(BuildContext context) {
+    const frameSize = 260.0;
+    const frameRadius = 16.0;
+
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // Camera preview
-          MobileScanner(
-            controller: controller.scannerController,
-            onDetect: controller.onDetect,
-          ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final frameLeft = (constraints.maxWidth - frameSize) / 2;
+          final frameTop = (constraints.maxHeight - frameSize) / 2;
+          final frameRect = Rect.fromLTWH(
+            frameLeft,
+            frameTop,
+            frameSize,
+            frameSize,
+          );
 
-          // Overlay UI
-          SafeArea(
-            child: Column(
-              children: [
-                _buildHeader(),
-                const Spacer(),
-                _buildScanFrame(),
-                const Spacer(),
-                _buildBottomSection(context),
-              ],
-            ),
-          ),
+          return Stack(
+            children: [
+              MobileScanner(
+                controller: controller.scannerController,
+                onDetect: controller.onDetect,
+              ),
 
-          // Processing / error overlay
-          Obx(() {
-            if (controller.isProcessing.value) {
-              return const ColoredBox(
-                color: Colors.black54,
-                child: Center(
-                  child: CircularProgressIndicator(color: Colors.white),
+              CustomPaint(
+                size: Size(constraints.maxWidth, constraints.maxHeight),
+                painter: _ScanOverlayPainter(
+                  frameRect: frameRect,
+                  radius: frameRadius,
                 ),
-              );
-            }
-            if (controller.errorMessage.value.isNotEmpty) {
-              return Positioned(
-                bottom: 180,
-                left: 24,
-                right: 24,
+              ),
+
+              Positioned(
+                left: frameRect.left,
+                top: frameRect.top,
+                width: frameSize,
+                height: frameSize,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
                   decoration: BoxDecoration(
-                    color: Colors.red.shade800,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    controller.errorMessage.value,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    border: Border.all(color: Colors.white, width: 2),
+                    borderRadius: BorderRadius.circular(frameRadius),
                   ),
                 ),
-              );
-            }
-            return const SizedBox.shrink();
-          }),
-        ],
+              ),
+
+              SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildHeader(),
+                    const Spacer(),
+                    _buildBottomSection(context),
+                  ],
+                ),
+              ),
+
+              Obx(() {
+                if (controller.isProcessing.value) {
+                  return const ColoredBox(
+                    color: Colors.black54,
+                    child: Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                  );
+                }
+                if (controller.errorMessage.value.isNotEmpty) {
+                  return Positioned(
+                    bottom: 180,
+                    left: 24,
+                    right: 24,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade800,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        controller.errorMessage.value,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              }),
+            ],
+          );
+        },
       ),
     );
   }
@@ -95,36 +131,6 @@ class HomeView extends GetView<HomeController> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildScanFrame() {
-    const frameSize = 260.0;
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // Dimmed overlay with transparent cutout effect
-        Container(
-          width: frameSize,
-          height: frameSize,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.white, width: 2),
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        // Corner accents
-        ...[
-          Alignment.topLeft,
-          Alignment.topRight,
-          Alignment.bottomLeft,
-          Alignment.bottomRight,
-        ].map(
-          (alignment) => Align(
-            alignment: alignment,
-            child: _CornerAccent(alignment: alignment),
-          ),
-        ),
-      ],
     );
   }
 
@@ -160,62 +166,23 @@ class HomeView extends GetView<HomeController> {
   }
 }
 
-class _CornerAccent extends StatelessWidget {
-  final Alignment alignment;
+class _ScanOverlayPainter extends CustomPainter {
+  const _ScanOverlayPainter({required this.frameRect, required this.radius});
 
-  const _CornerAccent({required this.alignment});
-
-  @override
-  Widget build(BuildContext context) {
-    const size = 24.0;
-    const thickness = 4.0;
-    const color = Color(0xFFFF6B35);
-
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CustomPaint(
-        painter: _CornerPainter(
-          alignment: alignment,
-          color: color,
-          thickness: thickness,
-        ),
-      ),
-    );
-  }
-}
-
-class _CornerPainter extends CustomPainter {
-  final Alignment alignment;
-  final Color color;
-  final double thickness;
-
-  _CornerPainter({
-    required this.alignment,
-    required this.color,
-    required this.thickness,
-  });
+  final Rect frameRect;
+  final double radius;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = thickness
-      ..strokeCap = StrokeCap.square
-      ..style = PaintingStyle.stroke;
+    final path = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..addRRect(RRect.fromRectAndRadius(frameRect, Radius.circular(radius)));
 
-    final isLeft = alignment.x < 0;
-    final isTop = alignment.y < 0;
-
-    final startX = isLeft ? 0.0 : size.width;
-    final startY = isTop ? 0.0 : size.height;
-    final endX = isLeft ? size.width : 0.0;
-    final endY = isTop ? size.height : 0.0;
-
-    canvas.drawLine(Offset(startX, startY), Offset(endX, startY), paint);
-    canvas.drawLine(Offset(startX, startY), Offset(startX, endY), paint);
+    canvas.drawPath(path, Paint()..color = Colors.black.withOpacity(0.55));
   }
 
   @override
-  bool shouldRepaint(_CornerPainter oldDelegate) => false;
+  bool shouldRepaint(_ScanOverlayPainter old) =>
+      old.frameRect != frameRect || old.radius != radius;
 }
